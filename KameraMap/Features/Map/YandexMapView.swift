@@ -15,6 +15,7 @@ struct YandexMapView: UIViewRepresentable {
     var onClusterTap: @MainActor ([Int], Coordinate, Float) -> Void
     var onReportTap: @MainActor (Int) -> Void
     var onMapTap: @MainActor (Coordinate) -> Void
+    var onUserGesture: @MainActor () -> Void
 
     @Environment(\.colorScheme) var colorScheme
 
@@ -66,6 +67,7 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
     private var appliedTarget: UUID?
     private var isDark: Bool?
     private var logoInset: CGFloat?
+    private var gestureActive = false
 
     private let centered: YMKIconStyle = {
         let style = YMKIconStyle()
@@ -210,6 +212,12 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
         }
     }
 
+    private func beginGesture() {
+        guard !gestureActive else { return }
+        gestureActive = true
+        parent?.onUserGesture()
+    }
+
     private func clusterStatus(_ cluster: YMKCluster) -> CameraStatus {
         let statuses = cluster.placemarks.compactMap { ($0.userData as? MarkTag)?.status }
         if !statuses.isEmpty, statuses.allSatisfy({ $0 == .active }) {
@@ -227,7 +235,17 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
         cameraUpdateReason: YMKCameraUpdateReason,
         finished: Bool
     ) {
-        guard finished else { return }
+        guard finished else {
+            if cameraUpdateReason == .gestures {
+                MainActor.assumeIsolated {
+                    beginGesture()
+                }
+            }
+            return
+        }
+        MainActor.assumeIsolated {
+            gestureActive = false
+        }
         let visible = map.visibleRegion
         let corners = [visible.topLeft, visible.topRight, visible.bottomLeft, visible.bottomRight]
         let lats = corners.map(\.latitude)

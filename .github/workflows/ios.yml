@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Xcode
         run: |
@@ -28,18 +28,23 @@ jobs:
         env:
           YANDEX_MAPKIT_KEY: ${{ secrets.YANDEX_MAPKIT_KEY }}
         run: |
-          if [ -n "$YANDEX_MAPKIT_KEY" ]; then
-            printf 'KM_YANDEX_MAPKIT_KEY = %s\n' "$YANDEX_MAPKIT_KEY" > Config/Secrets.xcconfig
-            echo "MapKit key: set"
+          key=$(printf '%s' "$YANDEX_MAPKIT_KEY" | tr -d '[:space:]')
+          if [ -z "$key" ]; then
+            echo "::warning::YANDEX_MAPKIT_KEY is empty, the map will show a placeholder"
+            exit 0
+          fi
+          printf 'KM_YANDEX_MAPKIT_KEY = %s\n' "$key" > Config/Secrets.xcconfig
+          if printf '%s' "$key" | grep -Eq '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$'; then
+            echo "MapKit key: set, ${#key} characters"
           else
-            echo "MapKit key: missing, the map will show a placeholder"
+            echo "::warning::YANDEX_MAPKIT_KEY is set (${#key} characters) but does not look like a MapKit key"
           fi
 
       - name: Generate project
         run: xcodegen generate
 
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .spm
           key: spm-${{ hashFiles('project.yml') }}
@@ -74,14 +79,14 @@ jobs:
           fi
           ls screenshots | head -50
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: screenshots
           path: screenshots
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: build-log

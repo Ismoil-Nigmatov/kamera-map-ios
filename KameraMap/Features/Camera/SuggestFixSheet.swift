@@ -85,7 +85,7 @@ struct SuggestFixSheet: View {
                 .padding(20)
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom) {
+            .bottomActionBar {
                 Button {
                     send()
                 } label: {
@@ -97,9 +97,6 @@ struct SuggestFixSheet: View {
                 }
                 .buttonStyle(ProminentButtonStyle())
                 .disabled(!canSend)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.bar)
                 .accessibilityIdentifier("sendSuggestionButton")
             }
             .navigationTitle("Что не так с камерой?")

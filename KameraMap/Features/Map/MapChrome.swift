@@ -27,8 +27,7 @@ struct TopBar: View {
                 }
             }
             .padding(10)
-            .background(.regularMaterial, in: .rect(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            .floatingSurface(.rect(cornerRadius: 18, style: .continuous))
 
             Spacer(minLength: 0)
 
@@ -40,17 +39,16 @@ struct TopBar: View {
                     Text(session.user?.initials ?? "…")
                         .font(.subheadline.weight(.bold))
                         .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: .circle)
+                        .floatingSurface(.circle, interactive: true)
                 } else {
                     Text("Войти")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 16)
                         .frame(height: 44)
-                        .background(.regularMaterial, in: .capsule)
+                        .floatingSurface(.capsule, interactive: true)
                 }
             }
             .buttonStyle(.plain)
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
             .accessibilityIdentifier("accountButton")
             .accessibilityLabel(session.isSignedIn ? "Профиль" : "Войти")
         }
@@ -69,8 +67,8 @@ private struct FilterToggle: View {
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isOn ? Color.primary : Color.clear, in: .capsule)
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(isOn ? 0 : 0.2)))
+                .background(isOn ? Color(uiColor: .label) : Color.clear, in: .capsule)
+                .overlay(Capsule().strokeBorder(Color(uiColor: .label).opacity(isOn ? 0 : 0.2)))
                 .foregroundStyle(isOn ? Color(uiColor: .systemBackground) : .secondary)
         }
         .buttonStyle(.plain)
@@ -120,8 +118,7 @@ struct MapHints: View {
             .foregroundStyle(color)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
-            .background(.regularMaterial, in: .capsule)
-            .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+            .floatingSurface(.capsule)
             .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
@@ -143,10 +140,9 @@ struct MapActions: View {
                     }
                 }
                 .frame(width: 52, height: 52)
-                .background(.regularMaterial, in: .circle)
+                .floatingSurface(.circle, interactive: true)
             }
             .buttonStyle(.plain)
-            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
             .accessibilityIdentifier("locateButton")
             .accessibilityLabel("Показать, где я")
 
@@ -222,8 +218,7 @@ struct PlacementCard: View {
             }
         }
         .padding(14)
-        .background(.regularMaterial, in: .rect(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .floatingSurface(.rect(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -242,8 +237,7 @@ struct ToastOverlay: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(.regularMaterial, in: .capsule)
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+                .floatingSurface(.capsule)
                 .padding(.horizontal, 20)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .onTapGesture { toasts.dismiss() }

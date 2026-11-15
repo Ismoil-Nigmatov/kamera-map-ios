@@ -22,7 +22,8 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.buttons["reportButton"].waitForExistence(timeout: 30))
         sleep(8)
         snap("01-camera-card", app)
-        app.swipeUp()
+        let sheetTop = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.64))
+        sheetTop.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)))
         sleep(2)
         snap("02-camera-card-full", app)
     }
@@ -48,16 +49,17 @@ final class ScreenshotTests: XCTestCase {
             snap("11-login-code", app)
 
             let digits = String(shown.label.filter(\.isNumber).suffix(6))
+            let name = app.textFields["nameField"]
+            let isNewUser = name.exists
             let codeField = app.textFields["codeField"]
             codeField.tap()
             codeField.typeText(digits)
 
-            let name = app.textFields["nameField"]
-            if name.exists {
+            if isNewUser {
                 name.tap()
                 name.typeText("CI Tester")
+                app.buttons["signInButton"].tap()
             }
-            app.buttons["signInButton"].tap()
         } else if app.buttons["Готово"].exists {
             app.buttons["Готово"].tap()
         }
@@ -72,7 +74,8 @@ final class ScreenshotTests: XCTestCase {
 
         app.buttons["chooseLocationButton"].tap()
         allowLocationIfAsked()
-        sleep(4)
+        XCTAssertTrue(app.buttons["placeHereButton"].waitForExistence(timeout: 5))
+        sleep(2)
         snap("21-report-placement", app)
 
         if app.buttons["Отмена"].exists {
@@ -83,6 +86,17 @@ final class ScreenshotTests: XCTestCase {
         account.tap()
         sleep(2)
         snap("30-profile", app)
+
+        let deleteRow = app.buttons["deleteAccountButton"]
+        XCTAssertTrue(deleteRow.waitForExistence(timeout: 5))
+        deleteRow.tap()
+        let confirm = app.buttons
+            .matching(NSPredicate(format: "label == %@ AND identifier != %@", "Удалить аккаунт", "deleteAccountButton"))
+            .firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.buttons["Войти"].waitForExistence(timeout: 15))
+        snap("31-signed-out", app)
     }
 
     @MainActor

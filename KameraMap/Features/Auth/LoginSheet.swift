@@ -115,6 +115,7 @@ struct LoginSheet: View {
                     Spacer(minLength: 0)
                     Button("Вставить") {
                         code = shown
+                        focus = login.isNewUser ? .name : nil
                     }
                     .font(.subheadline.weight(.semibold))
                 }
@@ -123,7 +124,7 @@ struct LoginSheet: View {
             }
 
             TextField("Код из 6 цифр", text: $code)
-                .font(.system(.title2, design: .monospaced).weight(.semibold))
+                .font(.title2.weight(.semibold).monospacedDigit())
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .focused($focus, equals: .code)
@@ -133,6 +134,8 @@ struct LoginSheet: View {
                     let digits = String(value.filter(\.isNumber).prefix(6))
                     if digits != value {
                         code = digits
+                    } else if digits.count == 6, !login.isNewUser, !isWorking {
+                        Task { await signIn(login) }
                     }
                 }
                 .accessibilityIdentifier("codeField")
@@ -143,7 +146,13 @@ struct LoginSheet: View {
                         .font(.headline)
                     TextField("Имя", text: $name)
                         .textContentType(.givenName)
+                        .submitLabel(.go)
                         .focused($focus, equals: .name)
+                        .onSubmit {
+                            if canSignIn(login) {
+                                Task { await signIn(login) }
+                            }
+                        }
                         .padding(16)
                         .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 16, style: .continuous))
                         .accessibilityIdentifier("nameField")
@@ -160,7 +169,7 @@ struct LoginSheet: View {
                 }
             }
             .buttonStyle(ProminentButtonStyle())
-            .disabled(code.count != 6 || (login.isNewUser && name.trimmingCharacters(in: .whitespaces).isEmpty) || isWorking)
+            .disabled(!canSignIn(login))
             .accessibilityIdentifier("signInButton")
 
             TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -178,6 +187,10 @@ struct LoginSheet: View {
                 }
             }
         }
+    }
+
+    private func canSignIn(_ login: LoginCode) -> Bool {
+        code.count == 6 && !isWorking && (!login.isNewUser || !name.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     private func requestCode() async {
@@ -204,6 +217,7 @@ struct LoginSheet: View {
             toasts.show("Вы вошли. Добро пожаловать!")
             store.didSignIn()
         } catch {
+            Haptics.error()
             toasts.show(error)
         }
     }

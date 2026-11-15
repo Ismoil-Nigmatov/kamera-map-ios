@@ -64,6 +64,7 @@ struct ProfileSheet: View {
                     } label: {
                         Label("Удалить аккаунт", systemImage: "trash")
                     }
+                    .accessibilityIdentifier("deleteAccountButton")
                 } footer: {
                     Text("Удаление необратимо: аккаунт и ваши голоса исчезнут, метки и правки останутся без автора.")
                 }

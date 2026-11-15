@@ -23,6 +23,7 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
 
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var waiting: [CheckedContinuation<Coordinate, Error>] = []
+    @ObservationIgnored private var deadline: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -31,12 +32,19 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
         isAuthorized = Self.allows(manager.authorizationStatus)
     }
 
+    var lastKnown: Coordinate? {
+        recent(within: 120)
+    }
+
     func current() async throws -> Coordinate {
         switch manager.authorizationStatus {
         case .denied, .restricted:
             throw LocationFailure.denied
         default:
             break
+        }
+        if let fresh = recent(within: 10) {
+            return fresh
         }
 
         isLocating = true
@@ -47,12 +55,36 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
             if manager.authorizationStatus == .notDetermined {
                 manager.requestWhenInUseAuthorization()
             } else {
-                manager.requestLocation()
+                request()
             }
         }
     }
 
+    private func recent(within seconds: TimeInterval) -> Coordinate? {
+        guard Self.allows(manager.authorizationStatus),
+              let location = manager.location,
+              location.horizontalAccuracy >= 0,
+              location.horizontalAccuracy <= 500,
+              -location.timestamp.timeIntervalSinceNow <= seconds
+        else {
+            return nil
+        }
+        return Coordinate(lat: location.coordinate.latitude, lng: location.coordinate.longitude)
+    }
+
+    private func request() {
+        manager.requestLocation()
+        deadline?.cancel()
+        deadline = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.finish(.failure(LocationFailure.unavailable))
+        }
+    }
+
     private func finish(_ result: Result<Coordinate, Error>) {
+        deadline?.cancel()
+        deadline = nil
         let pending = waiting
         waiting.removeAll()
         for continuation in pending {
@@ -85,7 +117,7 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
             switch status {
             case .authorizedWhenInUse, .authorizedAlways:
                 if !waiting.isEmpty {
-                    self.manager.requestLocation()
+                    request()
                 }
             case .denied, .restricted:
                 finish(.failure(LocationFailure.denied))

@@ -57,6 +57,7 @@ final class MapStore {
     var target: CameraTarget?
     var placing: ReportDraft?
     @ObservationIgnored private var afterLogin: MapSheet?
+    @ObservationIgnored private var placementTouched = false
 
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let toasts: ToastCenter
@@ -184,9 +185,16 @@ final class MapStore {
 
     func mapTapped(at point: Coordinate) {
         if placing != nil {
+            placementTouched = true
             target = CameraTarget(coordinate: point, zoom: nil)
         } else if sheet != nil {
             sheet = nil
+        }
+    }
+
+    func userMovedMap() {
+        if placing != nil {
+            placementTouched = true
         }
     }
 
@@ -254,13 +262,22 @@ final class MapStore {
 
     func startPlacing(_ draft: ReportDraft, near location: Coordinate?) {
         placing = draft
+        placementTouched = false
         sheet = nil
-        let zoom = max(region?.zoom ?? 16, AppConfig.placementZoom + 1)
         if let location {
-            target = CameraTarget(coordinate: location, zoom: zoom)
+            target = CameraTarget(coordinate: location, zoom: placementZoom)
         } else if let region, region.zoom < AppConfig.placementZoom {
-            target = CameraTarget(coordinate: region.center, zoom: zoom)
+            target = CameraTarget(coordinate: region.center, zoom: placementZoom)
         }
+    }
+
+    func refinePlacement(_ draft: ReportDraft, near location: Coordinate) {
+        guard placing == draft, !placementTouched else { return }
+        target = CameraTarget(coordinate: location, zoom: placementZoom)
+    }
+
+    private var placementZoom: Float {
+        max(region?.zoom ?? 16, AppConfig.placementZoom + 1)
     }
 
     func cancelPlacing() {

@@ -113,7 +113,7 @@ struct ChoiceChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(
-                    isSelected ? Color.primary : Color(uiColor: .secondarySystemBackground),
+                    isSelected ? Color(uiColor: .label) : Color(uiColor: .secondarySystemBackground),
                     in: .capsule
                 )
                 .foregroundStyle(isSelected ? Color(uiColor: .systemBackground) : .primary)
@@ -251,5 +251,42 @@ struct Card<Content: View>: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 16, style: .continuous))
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func floatingSurface<S: Shape>(_ shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(interactive ? Glass.regular.interactive() : Glass.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        }
+    }
+
+    func bottomActionBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        modifier(BottomActionBar(bar: bar()))
+    }
+}
+
+private struct BottomActionBar<Bar: View>: ViewModifier {
+    let bar: Bar
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.safeAreaBar(edge: .bottom) {
+                bar
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+            }
+        } else {
+            content.safeAreaInset(edge: .bottom) {
+                bar
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(.bar)
+            }
+        }
     }
 }

@@ -33,6 +33,8 @@ struct MapScreen: View {
                             Spacer()
                             MapActions(onLocate: locate, onReport: startReport)
                         }
+                        .opacity(actionsHidden ? 0 : 1)
+                        .allowsHitTesting(!actionsHidden)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -43,6 +45,7 @@ struct MapScreen: View {
             }
         }
         .animation(.snappy(duration: 0.3), value: store.placing)
+        .animation(.easeInOut(duration: 0.2), value: actionsHidden)
         .sheet(item: $store.sheet) { sheet in
             SheetContent(sheet: sheet)
         }
@@ -81,12 +84,17 @@ struct MapScreen: View {
                     Haptics.tap()
                     store.openReport(id)
                 },
-                onMapTap: { store.mapTapped(at: $0) }
+                onMapTap: { store.mapTapped(at: $0) },
+                onUserGesture: { store.userMovedMap() }
             )
             .ignoresSafeArea()
         } else {
             MissingMapKeyView()
         }
+    }
+
+    private var actionsHidden: Bool {
+        store.sheet?.coversMapPartially ?? false
     }
 
     private func logoInset(screenHeight: CGFloat) -> CGFloat {
@@ -156,6 +164,6 @@ private extension View {
             .presentationBackgroundInteraction(.enabled(upThrough: .fraction(AppConfig.detailSheetFraction)))
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(24)
-            .presentationContentInteraction(.scrolls)
+            .presentationContentInteraction(.resizes)
     }
 }

@@ -57,7 +57,7 @@ struct ReportTypeSheet: View {
                 .padding(20)
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom) {
+            .bottomActionBar {
                 Button {
                     chooseLocation()
                 } label: {
@@ -65,9 +65,6 @@ struct ReportTypeSheet: View {
                 }
                 .buttonStyle(ProminentButtonStyle())
                 .disabled(!canContinue)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.bar)
                 .accessibilityIdentifier("chooseLocationButton")
             }
             .navigationTitle("Что вы видите?")
@@ -85,9 +82,11 @@ struct ReportTypeSheet: View {
     private func chooseLocation() {
         guard let type else { return }
         let draft = ReportDraft(type: type, comment: comment.trimmingCharacters(in: .whitespacesAndNewlines))
+        store.startPlacing(draft, near: location.lastKnown)
         Task {
-            let point = try? await location.current()
-            store.startPlacing(draft, near: point)
+            if let point = try? await location.current() {
+                store.refinePlacement(draft, near: point)
+            }
         }
     }
 }
