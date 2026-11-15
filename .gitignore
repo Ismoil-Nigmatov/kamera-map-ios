@@ -8,3 +8,11 @@ screenshots/
 xcodebuild.log
 Config/Secrets.xcconfig
 .DS_Store
+app.log
+crashes/
+log-stream.pid
+device-build.log
+Payload/
+*.ipa
+*.ipa.enc
+ipa.key*
