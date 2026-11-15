@@ -204,7 +204,8 @@ struct SheetHeader<Leading: View>: View {
             leading
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.title3.weight(.bold))
+                    .font(title.count > 32 ? .headline : .title3.weight(.bold))
+                    .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle {
                     Text(subtitle)

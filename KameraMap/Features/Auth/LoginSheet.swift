@@ -72,17 +72,10 @@ struct LoginSheet: View {
 
             HStack(spacing: 10) {
                 Text("+998")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.secondary)
-                TextField("90 123 45 67", text: Binding(
-                    get: { Format.nationalPhone(phoneDigits) },
-                    set: { phoneDigits = Format.nationalDigits($0) }
-                ))
-                .font(.title3.weight(.semibold))
-                .keyboardType(.phonePad)
-                .textContentType(.telephoneNumber)
-                .focused($focus, equals: .phone)
-                .accessibilityIdentifier("phoneField")
+                PhoneField(digits: $phoneDigits, isFocused: step == .phone)
+                    .frame(height: 30)
             }
             .padding(16)
             .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 16, style: .continuous))
