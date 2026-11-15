@@ -1,0 +1,4 @@
+KM_API_BASE_URL = https:/$()/test.ismoiljon.me
+KM_YANDEX_MAPKIT_KEY =
+
+#include? "Secrets.xcconfig"

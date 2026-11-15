@@ -1,0 +1,89 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -i ios || true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Secrets
+        env:
+          YANDEX_MAPKIT_KEY: ${{ secrets.YANDEX_MAPKIT_KEY }}
+        run: |
+          if [ -n "$YANDEX_MAPKIT_KEY" ]; then
+            printf 'KM_YANDEX_MAPKIT_KEY = %s\n' "$YANDEX_MAPKIT_KEY" > Config/Secrets.xcconfig
+            echo "MapKit key: set"
+          else
+            echo "MapKit key: missing, the map will show a placeholder"
+          fi
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .spm
+          key: spm-${{ hashFiles('project.yml') }}
+
+      - name: Pick simulator
+        id: sim
+        run: echo "udid=$(python3 scripts/pick-simulator.py)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        env:
+          SIMULATOR: ${{ steps.sim.outputs.udid }}
+        run: |
+          set +e
+          xcodebuild test \
+            -project KameraMap.xcodeproj \
+            -scheme KameraMap \
+            -destination "id=$SIMULATOR" \
+            -clonedSourcePackagesDirPath .spm \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            > xcodebuild.log 2>&1
+          status=$?
+          grep -E "error:|Test Case .* (passed|failed)|\*\* (BUILD|TEST) " xcodebuild.log | head -300
+          exit $status
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p screenshots
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path TestResults.xcresult --output-path screenshots || true
+          fi
+          ls screenshots | head -50
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: xcodebuild.log
+          if-no-files-found: ignore

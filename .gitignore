@@ -1,0 +1,10 @@
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+.spm/
+*.xcresult
+screenshots/
+xcodebuild.log
+Config/Secrets.xcconfig
+.DS_Store
