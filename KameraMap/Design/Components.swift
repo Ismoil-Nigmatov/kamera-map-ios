@@ -256,11 +256,13 @@ struct Card<Content: View>: View {
 
 extension View {
     @ViewBuilder
-    func floatingSurface<S: Shape>(_ shape: S, interactive: Bool = false) -> some View {
+    func floatingSurface<S: Shape>(_ shape: S) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(interactive ? Glass.regular.interactive() : Glass.regular, in: shape)
+            glassEffect(.regular, in: shape)
+                .contentShape(shape)
         } else {
             background(.regularMaterial, in: shape)
+                .contentShape(shape)
                 .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
         }
     }

@@ -5,13 +5,19 @@ struct MapScreen: View {
     @Environment(SessionStore.self) var session
     @Environment(LocationProvider.self) var location
     @Environment(ToastCenter.self) var toasts
+    @State private var placementCardHeight: CGFloat = 0
+
+    private let placementBottomPadding: CGFloat = 30
 
     var body: some View {
         @Bindable var store = store
 
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                mapLayer(height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
+                mapLayer(
+                    height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom,
+                    safeBottom: geometry.safeAreaInsets.bottom
+                )
 
                 if let draft = store.placing {
                     PlacementPin(type: draft.type)
@@ -27,6 +33,11 @@ struct MapScreen: View {
                     Spacer(minLength: 0)
                     if let draft = store.placing {
                         PlacementCard(draft: draft)
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { height in
+                                placementCardHeight = height
+                            }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {
                         HStack {
@@ -39,7 +50,7 @@ struct MapScreen: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
-                .padding(.bottom, store.placing == nil ? 12 : 30)
+                .padding(.bottom, store.placing == nil ? 12 : placementBottomPadding)
 
                 ToastOverlay()
             }
@@ -61,7 +72,7 @@ struct MapScreen: View {
     }
 
     @ViewBuilder
-    private func mapLayer(height: CGFloat) -> some View {
+    private func mapLayer(height: CGFloat, safeBottom: CGFloat) -> some View {
         if MapKitBootstrap.isConfigured {
             YandexMapView(
                 cameras: store.visibleCameras,
@@ -69,7 +80,7 @@ struct MapScreen: View {
                 selectedCameraID: store.selectedCameraID,
                 selectedReportID: store.selectedReportID,
                 target: store.target,
-                logoBottomInset: logoInset(screenHeight: height),
+                logoBottomInset: logoInset(screenHeight: height, safeBottom: safeBottom),
                 showsUserLocation: location.isAuthorized,
                 onRegionChange: { store.regionChanged($0) },
                 onCameraTap: { id in
@@ -97,9 +108,9 @@ struct MapScreen: View {
         store.sheet?.coversMapPartially ?? false
     }
 
-    private func logoInset(screenHeight: CGFloat) -> CGFloat {
+    private func logoInset(screenHeight: CGFloat, safeBottom: CGFloat) -> CGFloat {
         if store.placing != nil {
-            return 150
+            return safeBottom + placementBottomPadding + max(placementCardHeight, 120) + 6
         }
         if let sheet = store.sheet, sheet.coversMapPartially {
             return screenHeight * AppConfig.detailSheetFraction

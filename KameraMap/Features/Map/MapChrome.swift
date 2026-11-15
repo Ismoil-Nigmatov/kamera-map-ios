@@ -39,13 +39,13 @@ struct TopBar: View {
                     Text(session.user?.initials ?? "…")
                         .font(.subheadline.weight(.bold))
                         .frame(width: 44, height: 44)
-                        .floatingSurface(.circle, interactive: true)
+                        .floatingSurface(.circle)
                 } else {
                     Text("Войти")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 16)
                         .frame(height: 44)
-                        .floatingSurface(.capsule, interactive: true)
+                        .floatingSurface(.capsule)
                 }
             }
             .buttonStyle(.plain)
@@ -140,7 +140,7 @@ struct MapActions: View {
                     }
                 }
                 .frame(width: 52, height: 52)
-                .floatingSurface(.circle, interactive: true)
+                .floatingSurface(.circle)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("locateButton")

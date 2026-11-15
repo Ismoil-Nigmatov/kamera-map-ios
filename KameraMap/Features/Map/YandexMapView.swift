@@ -23,14 +23,38 @@ struct YandexMapView: UIViewRepresentable {
         MapCoordinator()
     }
 
-    func makeUIView(context: Context) -> YMKMapView {
-        let view: YMKMapView = YMKMapView(frame: .zero)
-        context.coordinator.attach(to: view, initial: target)
-        return view
+    func makeUIView(context: Context) -> MapContainerView {
+        let container = MapContainerView()
+        context.coordinator.attach(to: container, initial: target)
+        return container
     }
 
-    func updateUIView(_ view: YMKMapView, context: Context) {
+    func updateUIView(_ container: MapContainerView, context: Context) {
         context.coordinator.update(with: self, dark: colorScheme == .dark)
+    }
+}
+
+final class MapContainerView: UIView {
+    let mapView: YMKMapView
+    var onResize: (@MainActor () -> Void)?
+    private var laidOutSize: CGSize = .zero
+
+    init() {
+        mapView = YMKMapView(frame: .zero)
+        super.init(frame: .zero)
+        addSubview(mapView)
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        mapView.frame = bounds
+        guard bounds.size != laidOutSize else { return }
+        laidOutSize = bounds.size
+        onResize?()
     }
 }
 
@@ -75,8 +99,12 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
         return style
     }()
 
-    func attach(to view: YMKMapView, initial: CameraTarget?) {
+    func attach(to container: MapContainerView, initial: CameraTarget?) {
+        let view = container.mapView
         self.view = view
+        container.onResize = { [weak self] in
+            self?.viewResized()
+        }
         let map = view.mapWindow.map
         map.isRotateGesturesEnabled = false
         map.isTiltGesturesEnabled = false
@@ -212,6 +240,44 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
         }
     }
 
+    private func viewResized() {
+        Task { @MainActor [weak self] in
+            for _ in 0..<6 {
+                guard let self else { return }
+                if self.reportCurrentRegion() {
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    @discardableResult
+    private func reportCurrentRegion() -> Bool {
+        guard let map = view?.mapWindow.map, let region = Self.region(of: map, at: map.cameraPosition) else {
+            return false
+        }
+        parent?.onRegionChange(region)
+        return true
+    }
+
+    nonisolated private static func region(of map: YMKMap, at position: YMKCameraPosition) -> MapRegion? {
+        let visible = map.visibleRegion
+        let corners = [visible.topLeft, visible.topRight, visible.bottomLeft, visible.bottomRight]
+        let lats = corners.map(\.latitude)
+        let lngs = corners.map(\.longitude)
+        guard let minLat = lats.min(), let maxLat = lats.max(), let minLng = lngs.min(), let maxLng = lngs.max(),
+              maxLat - minLat > 0.0001, maxLng - minLng > 0.0001
+        else {
+            return nil
+        }
+        return MapRegion(
+            bbox: BoundingBox(minLng: minLng, minLat: minLat, maxLng: maxLng, maxLat: maxLat),
+            zoom: position.zoom,
+            center: Coordinate(lat: position.target.latitude, lng: position.target.longitude)
+        )
+    }
+
     private func beginGesture() {
         guard !gestureActive else { return }
         gestureActive = true
@@ -246,20 +312,7 @@ final class MapCoordinator: NSObject, YMKMapCameraListener, YMKMapInputListener,
         MainActor.assumeIsolated {
             gestureActive = false
         }
-        let visible = map.visibleRegion
-        let corners = [visible.topLeft, visible.topRight, visible.bottomLeft, visible.bottomRight]
-        let lats = corners.map(\.latitude)
-        let lngs = corners.map(\.longitude)
-        let region = MapRegion(
-            bbox: BoundingBox(
-                minLng: lngs.min() ?? 0,
-                minLat: lats.min() ?? 0,
-                maxLng: lngs.max() ?? 0,
-                maxLat: lats.max() ?? 0
-            ),
-            zoom: cameraPosition.zoom,
-            center: Coordinate(lat: cameraPosition.target.latitude, lng: cameraPosition.target.longitude)
-        )
+        guard let region = Self.region(of: map, at: cameraPosition) else { return }
         Task { @MainActor [weak self] in
             self?.parent?.onRegionChange(region)
         }

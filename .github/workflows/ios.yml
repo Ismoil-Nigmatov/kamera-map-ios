@@ -70,6 +70,22 @@ jobs:
           grep -E "error:|Test Case .* (passed|failed)|\*\* (BUILD|TEST) " xcodebuild.log | head -300
           exit $status
 
+      - name: App log
+        if: always()
+        env:
+          SIMULATOR: ${{ steps.sim.outputs.udid }}
+          YANDEX_MAPKIT_KEY: ${{ secrets.YANDEX_MAPKIT_KEY }}
+        run: |
+          xcrun simctl spawn "$SIMULATOR" log show --last 45m --info --debug --style compact \
+            --predicate 'process == "KameraMap"' > app.log 2>&1 || true
+          key=$(printf '%s' "$YANDEX_MAPKIT_KEY" | tr -d '[:space:]')
+          if [ -n "$key" ]; then
+            sed -i '' "s/$key/[mapkit-key]/g" app.log
+          fi
+          sed -E -i '' 's/([Aa][Pp][Ii]_?[Kk][Ee][Yy]=)[^&[:space:]]+/\1[hidden]/g' app.log
+          echo "app.log: $(wc -l < app.log) lines"
+          grep -iE "yandex|mapkit|tile|error|fail|invalid|forbidden|unauthori|denied|me\.ismoiljon" app.log | tail -150 || true
+
       - name: Export screenshots
         if: always()
         run: |
@@ -90,5 +106,7 @@ jobs:
         if: always()
         with:
           name: build-log
-          path: xcodebuild.log
+          path: |
+            xcodebuild.log
+            app.log
           if-no-files-found: ignore

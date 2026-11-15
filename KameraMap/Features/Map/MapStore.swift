@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 enum MapSheet: Identifiable, Hashable {
     case camera(Int)
@@ -62,6 +63,7 @@ final class MapStore {
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let toasts: ToastCenter
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    private static let log = Logger(subsystem: "me.ismoiljon.kameramap", category: "map")
 
     init(api: APIClient, toasts: ToastCenter) {
         self.api = api
@@ -133,6 +135,7 @@ final class MapStore {
         } catch is CancellationError {
             return
         } catch {
+            Self.log.error("Map data load failed: \(String(describing: error), privacy: .public)")
             loadFailed = true
         }
     }
