@@ -9,7 +9,8 @@ final class SessionStore {
     private(set) var user: User?
     private(set) var hasToken: Bool
 
-    init(api: APIClient = APIClient(baseURL: AppConfig.apiBaseURL)) {
+    init() {
+        let api = APIClient(baseURL: AppConfig.apiBaseURL)
         self.api = api
         let token = Keychain.token()
         api.token = token
