@@ -80,7 +80,7 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 15))
         snap("17-trip-alert", app)
         let sent = app.staticTexts
-            .matching(NSPredicate(format: "identifier == %@ AND label MATCHES %@", "tripStatus", ".*отправлено точек: [1-9][0-9]*"))
+            .matching(NSPredicate(format: "identifier == %@ AND label MATCHES %@", "tripStatus", "(?s).*отправлено: [1-9][0-9]*"))
             .firstMatch
         XCTAssertTrue(sent.waitForExistence(timeout: 45))
         snap("16-trip", app)

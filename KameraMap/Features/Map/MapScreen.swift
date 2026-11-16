@@ -9,7 +9,6 @@ struct MapScreen: View {
     @State private var placementCardHeight: CGFloat = 0
     @State private var tripPanelHeight: CGFloat = 0
     @State private var following = true
-    @State private var followZoomed = false
 
     private let placementBottomPadding: CGFloat = 30
 
@@ -75,7 +74,6 @@ struct MapScreen: View {
         .onChange(of: trip.isActive) { _, active in
             if active {
                 following = true
-                followZoomed = false
             }
         }
         .onChange(of: trip.location) { _, point in
@@ -150,8 +148,8 @@ struct MapScreen: View {
 
     private func follow(_ point: Coordinate?) {
         guard trip.isActive, following, let point else { return }
-        store.target = CameraTarget(coordinate: point, zoom: followZoomed ? nil : 16)
-        followZoomed = true
+        let zoomedOut = (store.region?.zoom ?? 0) < AppConfig.followZoom - 1
+        store.target = CameraTarget(coordinate: point, zoom: zoomedOut ? AppConfig.followZoom : nil)
     }
 
     private func startTrip() {

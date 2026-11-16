@@ -16,6 +16,7 @@ enum AppConfig {
     static let startZoom: Float = 13
     static let minDataZoom: Float = 11
     static let placementZoom: Float = 15
+    static let followZoom: Float = 16
     static let clusterListZoom: Float = 17
     static let reportsRefresh: Duration = .seconds(30)
     static let detailSheetFraction: CGFloat = 0.46

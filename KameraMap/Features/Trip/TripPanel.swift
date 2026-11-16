@@ -99,7 +99,7 @@ struct TripPanel: View {
         if trip.location == nil {
             return "Определяем, где вы…"
         }
-        return trip.isSharing ? "Передача включена · отправлено точек: \(trip.sent)" : "Передача геопозиции выключена"
+        return trip.isSharing ? "Передача включена\nотправлено: \(trip.sent)" : "Без передачи\nгеопозиции"
     }
 }
 
