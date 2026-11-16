@@ -44,7 +44,10 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
     private(set) var sent = 0
     private(set) var problem: String?
 
+    let alerts = TripAlerts()
+
     @ObservationIgnored var onSharingRevoked: (@MainActor () -> Void)?
+    @ObservationIgnored private var previous: TripPoint?
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var api: APIClient?
     @ObservationIgnored private var trip = UUID()
@@ -74,6 +77,8 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         problem = nil
         location = nil
         speedKmh = nil
+        previous = nil
+        alerts.reset()
         isSharing = sharing
         isActive = true
 
@@ -101,6 +106,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         manager.allowsBackgroundLocationUpdates = false
         uploader?.cancel()
         uploader = nil
+        alerts.reset()
         UIApplication.shared.isIdleTimerDisabled = false
         Task { await upload() }
     }
@@ -114,11 +120,18 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         buffer.removeAll()
     }
 
-    private func record(_ point: TripPoint) {
+    private func record(_ raw: TripPoint) {
+        guard isActive else { return }
+        let point = derived(from: raw)
+        previous = raw
         location = Coordinate(lat: point.lat, lng: point.lng)
         speedKmh = point.speed.map { Int(($0 * 3.6).rounded()) }
 
-        guard isActive, isSharing else { return }
+        if let api {
+            alerts.process(point, api: api)
+        }
+
+        guard isSharing else { return }
         if let accuracy = point.accuracy, accuracy > Self.maxAccuracy {
             return
         }
@@ -127,6 +140,24 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         if buffer.count > Self.maxBuffered {
             buffer.removeFirst(buffer.count - Self.maxBuffered)
         }
+    }
+
+    private func derived(from point: TripPoint) -> TripPoint {
+        guard point.speed == nil || point.heading == nil, let previous else { return point }
+        let from = Coordinate(lat: previous.lat, lng: previous.lng)
+        let to = Coordinate(lat: point.lat, lng: point.lng)
+        let distance = Geo.meters(from, to)
+        let seconds = point.recordedAt.timeIntervalSince(previous.recordedAt)
+        guard seconds > 0.3, distance >= 3 else { return point }
+
+        return TripPoint(
+            lat: point.lat,
+            lng: point.lng,
+            accuracy: point.accuracy,
+            speed: point.speed ?? distance / seconds,
+            heading: point.heading ?? Geo.bearing(from, to),
+            recordedAt: point.recordedAt
+        )
     }
 
     private func upload() async {

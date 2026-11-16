@@ -1,3 +1,4 @@
+import CoreLocation
 import XCTest
 
 final class ScreenshotTests: XCTestCase {
@@ -74,6 +75,10 @@ final class ScreenshotTests: XCTestCase {
             share.tap()
         }
         allowLocationIfAsked()
+        drive(toward: CLLocationCoordinate2D(latitude: 41.338836, longitude: 69.222328), from: 700, steps: 14)
+        let alert = app.descendants(matching: .any).matching(identifier: "tripAlert").firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 15))
+        snap("17-trip-alert", app)
         let sent = app.staticTexts
             .matching(NSPredicate(format: "identifier == %@ AND label MATCHES %@", "tripStatus", ".*отправлено точек: [1-9][0-9]*"))
             .firstMatch
@@ -114,6 +119,25 @@ final class ScreenshotTests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(app.buttons["Войти"].waitForExistence(timeout: 15))
         snap("31-signed-out", app)
+    }
+
+    @MainActor
+    private func drive(toward target: CLLocationCoordinate2D, from meters: Double, steps: Int) {
+        let stepMeters = 25.0
+        for step in 0..<steps {
+            let remaining = meters - Double(step) * stepMeters
+            let location = CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: target.latitude - remaining / 111_320, longitude: target.longitude),
+                altitude: 400,
+                horizontalAccuracy: 5,
+                verticalAccuracy: 5,
+                course: 0,
+                speed: stepMeters,
+                timestamp: Date()
+            )
+            XCUIDevice.shared.location = XCUILocation(location: location)
+            Thread.sleep(forTimeInterval: 1)
+        }
     }
 
     @MainActor
