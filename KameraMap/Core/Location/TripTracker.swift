@@ -58,7 +58,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
     private static let batchSize = 200
     private static let maxBuffered = 2_000
     private static let maxAccuracy = 100.0
-    private static let deniedText = "Разрешите доступ к геопозиции в Настройках."
+    private static let deniedText = "Нет доступа к геопозиции"
 
     override init() {
         super.init()
@@ -187,7 +187,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
             buffer.removeFirst(min(batch.count, buffer.count))
             problem = error.message
         } catch {
-            problem = "Нет связи — точки отправятся позже."
+            problem = "Нет связи, отправим позже"
         }
     }
 

@@ -33,6 +33,7 @@ struct TripPanel: View {
                         .font(.footnote)
                         .foregroundStyle(trip.problem == nil ? Color.secondary : Palette.brand)
                         .lineLimit(2)
+                        .accessibilityLabel(statusDescription)
                         .accessibilityIdentifier("tripStatus")
                 }
 
@@ -97,9 +98,19 @@ struct TripPanel: View {
             return problem
         }
         if trip.location == nil {
-            return "Определяем, где вы…"
+            return "Ищем вас…"
         }
-        return trip.isSharing ? "Передача включена\nотправлено: \(trip.sent)" : "Без передачи\nгеопозиции"
+        return trip.isSharing ? "Передача · \(trip.sent)" : "Без передачи"
+    }
+
+    private var statusDescription: String {
+        if let problem = trip.problem {
+            return problem
+        }
+        if trip.location == nil {
+            return "Определяем, где вы"
+        }
+        return trip.isSharing ? "Передача включена, отправлено точек: \(trip.sent)" : "Передача геопозиции выключена"
     }
 }
 
