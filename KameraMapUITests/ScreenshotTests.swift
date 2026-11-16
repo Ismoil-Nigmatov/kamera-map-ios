@@ -74,7 +74,7 @@ final class ScreenshotTests: XCTestCase {
             snap("15-trip-consent", app)
             share.tap()
         }
-        allowLocationIfAsked()
+        allowLocationIfAsked(timeout: 20)
         drive(toward: CLLocationCoordinate2D(latitude: 41.338836, longitude: 69.222328), from: 700, steps: 14)
         let alert = app.descendants(matching: .any).matching(identifier: "tripAlert").firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 15))
@@ -141,17 +141,12 @@ final class ScreenshotTests: XCTestCase {
     }
 
     @MainActor
-    private func allowLocationIfAsked() {
+    private func allowLocationIfAsked(timeout: TimeInterval = 5) {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let alert = springboard.alerts.firstMatch
-        guard alert.waitForExistence(timeout: 5) else { return }
-        let allow = alert.buttons
-            .matching(NSPredicate(
-                format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
-                "While Using", "использовании", "Allow Once", "один раз"
-            ))
+        let allow = springboard.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "While Using", "использовании"))
             .firstMatch
-        if allow.exists {
+        if allow.waitForExistence(timeout: timeout) {
             allow.tap()
         }
     }

@@ -58,6 +58,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
     private static let batchSize = 200
     private static let maxBuffered = 2_000
     private static let maxAccuracy = 100.0
+    private static let deniedText = "Разрешите доступ к геопозиции в Настройках."
 
     override init() {
         super.init()
@@ -82,12 +83,16 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         isSharing = sharing
         isActive = true
 
-        if manager.authorizationStatus == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        }
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
-        manager.startUpdatingLocation()
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            problem = Self.deniedText
+        default:
+            manager.startUpdatingLocation()
+        }
         UIApplication.shared.isIdleTimerDisabled = true
 
         uploader = Task { [weak self] in
@@ -122,6 +127,9 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
 
     private func record(_ raw: TripPoint) {
         guard isActive else { return }
+        if problem == Self.deniedText {
+            problem = nil
+        }
         let point = derived(from: raw)
         previous = raw
         location = Coordinate(lat: point.lat, lng: point.lng)
@@ -194,9 +202,28 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         let denied = (error as? CLError)?.code == .denied
+        let status = manager.authorizationStatus
         MainActor.assumeIsolated {
-            if denied {
-                problem = "Разрешите доступ к геопозиции в Настройках."
+            if denied, status == .denied || status == .restricted {
+                problem = Self.deniedText
+            }
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        MainActor.assumeIsolated {
+            guard isActive else { return }
+            switch status {
+            case .authorizedWhenInUse, .authorizedAlways:
+                if problem == Self.deniedText {
+                    problem = nil
+                }
+                self.manager.startUpdatingLocation()
+            case .denied, .restricted:
+                problem = Self.deniedText
+            default:
+                break
             }
         }
     }
