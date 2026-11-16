@@ -36,9 +36,14 @@ final class APIClient {
 
         decoder = Self.makeDecoder()
 
+        encoder = Self.makeEncoder()
+    }
+
+    nonisolated static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
-        self.encoder = encoder
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 
     nonisolated static func makeDecoder() -> JSONDecoder {

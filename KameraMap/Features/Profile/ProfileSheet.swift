@@ -7,6 +7,9 @@ struct ProfileSheet: View {
     @State var name = ""
     @State var isSaving = false
     @State var confirmDelete = false
+    @State var isChangingSharing = false
+    @State var confirmStopSharing = false
+    @Environment(TripTracker.self) var trip
 
     var body: some View {
         NavigationStack {
@@ -34,6 +37,26 @@ struct ProfileSheet: View {
                     .padding(.vertical, 4)
                 }
 
+                Section {
+                    Toggle(isOn: sharingBinding) {
+                        Label("Передавать геопозицию", systemImage: "location.fill")
+                    }
+                    .disabled(isChangingSharing || session.user == nil)
+                    .accessibilityIdentifier("sharingToggle")
+                    .confirmationDialog("Выключить передачу?", isPresented: $confirmStopSharing, titleVisibility: .visible) {
+                        Button("Выключить и удалить историю", role: .destructive) {
+                            Task { await changeSharing(false) }
+                        }
+                        Button("Отмена", role: .cancel) {}
+                    } message: {
+                        Text("История ваших поездок будет удалена.")
+                    }
+                } header: {
+                    Text("Поездки")
+                } footer: {
+                    Text("\(TripTexts.sharing) \(TripTexts.off)")
+                }
+
                 Section("Имя") {
                     TextField("Как вас зовут", text: $name)
                         .textContentType(.givenName)
@@ -52,6 +75,7 @@ struct ProfileSheet: View {
                 Section {
                     Button {
                         Task {
+                            trip.stop()
                             await session.signOut()
                             store.sheet = nil
                             toasts.show("Вы вышли из аккаунта.")
@@ -124,8 +148,38 @@ struct ProfileSheet: View {
         }
     }
 
+    private var sharingBinding: Binding<Bool> {
+        Binding(
+            get: { session.user?.isSharingLocation ?? false },
+            set: { enabled in
+                if enabled {
+                    Task { await changeSharing(true) }
+                } else {
+                    confirmStopSharing = true
+                }
+            }
+        )
+    }
+
+    private func changeSharing(_ enabled: Bool) async {
+        isChangingSharing = true
+        defer { isChangingSharing = false }
+        do {
+            try await session.setLocationSharing(enabled)
+            if enabled {
+                trip.enableSharing()
+            } else {
+                trip.disableSharing()
+            }
+            toasts.show(enabled ? "Передача геопозиции включена." : "Передача выключена, история поездок удалена.")
+        } catch {
+            toasts.show(error)
+        }
+    }
+
     private func deleteAccount() async {
         do {
+            trip.stop()
             try await session.deleteAccount()
             store.sheet = nil
             toasts.show("Аккаунт удалён.")

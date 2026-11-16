@@ -47,6 +47,9 @@ jobs:
           SIMULATOR: ${{ steps.sim.outputs.udid }}
         run: |
           xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl location "$SIMULATOR" start --speed=8 \
+            41.2856,69.2036 41.2995,69.2401 41.3111,69.2797 41.3260,69.2850 41.3400,69.3000 41.3550,69.3300 \
+            || echo "::warning::Location simulation is unavailable"
           nohup xcrun simctl spawn "$SIMULATOR" log stream --level debug --style compact \
             --predicate 'process == "KameraMap"' > app.log 2>&1 &
           echo $! > log-stream.pid

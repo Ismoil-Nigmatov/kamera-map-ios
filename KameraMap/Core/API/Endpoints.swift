@@ -23,6 +23,19 @@ private struct NameBody: Encodable {
     let name: String
 }
 
+private struct SharingBody: Encodable {
+    let enabled: Bool
+}
+
+private struct PositionsBody: Encodable {
+    let trip: String
+    let points: [TripPoint]
+}
+
+private struct StoredPositions: Decodable {
+    let stored: Int
+}
+
 private struct ReportBody: Encodable {
     let type: ReportType
     let lat: Double
@@ -98,5 +111,14 @@ extension APIClient {
 
     func deleteAccount() async throws {
         _ = try await send("DELETE", "me", as: EmptyResponse.self)
+    }
+
+    func setLocationSharing(_ enabled: Bool) async throws -> User {
+        try await send("PUT", "me/location-sharing", body: SharingBody(enabled: enabled), as: User.self).value
+    }
+
+    func uploadPositions(trip: UUID, points: [TripPoint]) async throws -> Int {
+        let body = PositionsBody(trip: trip.uuidString.lowercased(), points: points)
+        return try await send("POST", "me/positions", body: body, as: StoredPositions.self).value.stored
     }
 }

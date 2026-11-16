@@ -126,6 +126,7 @@ struct MapHints: View {
 struct MapActions: View {
     @Environment(LocationProvider.self) var location
     let onLocate: () -> Void
+    let onTrip: () -> Void
     let onReport: () -> Void
 
     var body: some View {
@@ -145,6 +146,16 @@ struct MapActions: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("locateButton")
             .accessibilityLabel("Показать, где я")
+
+            Button(action: onTrip) {
+                Label("В путь", systemImage: "car.fill")
+                    .font(.headline)
+                    .padding(.horizontal, 20)
+                    .frame(height: 50)
+                    .floatingSurface(.capsule)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("tripButton")
 
             Button(action: onReport) {
                 Label("Сообщить", systemImage: "megaphone.fill")

@@ -64,6 +64,23 @@ final class ScreenshotTests: XCTestCase {
             app.buttons["Готово"].tap()
         }
 
+        let tripButton = app.buttons["tripButton"]
+        XCTAssertTrue(tripButton.waitForExistence(timeout: 20))
+        sleep(1)
+        tripButton.tap()
+        let share = app.buttons["shareAndStartButton"]
+        if share.waitForExistence(timeout: 8) {
+            snap("15-trip-consent", app)
+            share.tap()
+        }
+        allowLocationIfAsked()
+        let sent = app.staticTexts
+            .matching(NSPredicate(format: "identifier == %@ AND label MATCHES %@", "tripStatus", ".*отправлено точек: [1-9][0-9]*"))
+            .firstMatch
+        XCTAssertTrue(sent.waitForExistence(timeout: 45))
+        snap("16-trip", app)
+        app.buttons["stopTripButton"].tap()
+
         let report = app.buttons["reportButton"]
         XCTAssertTrue(report.waitForExistence(timeout: 20))
         sleep(2)
@@ -103,14 +120,15 @@ final class ScreenshotTests: XCTestCase {
     private func allowLocationIfAsked() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let alert = springboard.alerts.firstMatch
-        if alert.waitForExistence(timeout: 4) {
-            for title in ["Allow While Using App", "Allow Once", "При использовании", "Разрешить один раз"] {
-                let button = alert.buttons[title]
-                if button.exists {
-                    button.tap()
-                    return
-                }
-            }
+        guard alert.waitForExistence(timeout: 5) else { return }
+        let allow = alert.buttons
+            .matching(NSPredicate(
+                format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                "While Using", "использовании", "Allow Once", "один раз"
+            ))
+            .firstMatch
+        if allow.exists {
+            allow.tap()
         }
     }
 

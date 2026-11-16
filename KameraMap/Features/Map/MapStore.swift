@@ -10,6 +10,7 @@ enum MapSheet: Identifiable, Hashable {
     case suggest(Int)
     case login
     case profile
+    case tripConsent(Bool)
 
     var id: String {
         switch self {
@@ -20,6 +21,7 @@ enum MapSheet: Identifiable, Hashable {
         case .suggest(let id): "suggest-\(id)"
         case .login: "login"
         case .profile: "profile"
+        case .tripConsent(let starting): starting ? "trip-consent-start" : "trip-consent-enable"
         }
     }
 
@@ -63,6 +65,8 @@ final class MapStore {
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let toasts: ToastCenter
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadedBox: BoundingBox?
+    @ObservationIgnored private var loadedAt = Date.distantPast
     private static let log = Logger(subsystem: "me.ismoiljon.kameramap", category: "map")
 
     init(api: APIClient, toasts: ToastCenter) {
@@ -102,12 +106,19 @@ final class MapStore {
 
     func regionChanged(_ region: MapRegion) {
         self.region = region
+        guard region.zoom >= AppConfig.minDataZoom else {
+            loadTask?.cancel()
+            return
+        }
+        if let loadedBox, loadedBox.contains(region.bbox), Date().timeIntervalSince(loadedAt) < 60 {
+            return
+        }
         loadTask?.cancel()
-        guard region.zoom >= AppConfig.minDataZoom else { return }
+        let box = region.bbox.padded(by: 0.5)
         loadTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled else { return }
-            await self?.load(region.bbox)
+            await self?.load(box)
         }
     }
 
@@ -131,10 +142,13 @@ final class MapStore {
                 cameras[camera.id] = camera
             }
             merge(reports: newReports, in: box)
+            loadedBox = box
+            loadedAt = Date()
             loadFailed = false
         } catch is CancellationError {
             return
         } catch {
+            loadedBox = nil
             Self.log.error("Map data load failed: \(String(describing: error), privacy: .public)")
             loadFailed = true
         }

@@ -47,7 +47,9 @@ targets:
           - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSLocationWhenInUseUsageDescription: Чтобы показать, где вы, и поставить метку рядом с вами.
+        NSLocationWhenInUseUsageDescription: Чтобы показать, где вы, поставить метку рядом с вами и вести поездку. Если вы включите передачу геопозиции, во время поездки она отправляется на сервер.
+        UIBackgroundModes:
+          - location
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: me.ismoiljon.kameramap

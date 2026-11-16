@@ -8,6 +8,7 @@ struct KameraMapApp: App {
     @State private var toasts: ToastCenter
     @State private var map: MapStore
     @State private var location = LocationProvider()
+    @State private var trip = TripTracker()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -27,8 +28,13 @@ struct KameraMapApp: App {
                 .environment(toasts)
                 .environment(map)
                 .environment(location)
+                .environment(trip)
                 .tint(Palette.brand)
                 .task {
+                    trip.onSharingRevoked = { [session, toasts] in
+                        toasts.show("Передача геопозиции выключена.")
+                        Task { await session.restore() }
+                    }
                     await session.restore()
                     await meta.load(using: session.api)
                 }

@@ -20,6 +20,18 @@ struct BoundingBox: Hashable, Sendable {
     func contains(_ point: Coordinate) -> Bool {
         point.lat >= minLat && point.lat <= maxLat && point.lng >= minLng && point.lng <= maxLng
     }
+
+    func contains(_ box: BoundingBox) -> Bool {
+        box.minLat >= minLat && box.maxLat <= maxLat && box.minLng >= minLng && box.maxLng <= maxLng
+    }
+
+    func padded(by fraction: Double, maxSpan: Double = 1.9) -> BoundingBox {
+        let lngSpan = maxLng - minLng
+        let latSpan = maxLat - minLat
+        let lngPad = min(lngSpan * fraction, max(0, (maxSpan - lngSpan) / 2))
+        let latPad = min(latSpan * fraction, max(0, (maxSpan - latSpan) / 2))
+        return BoundingBox(minLng: minLng - lngPad, minLat: minLat - latPad, maxLng: maxLng + lngPad, maxLat: maxLat + latPad)
+    }
 }
 
 enum CameraStatus: String, CaseIterable, Hashable, Sendable, Codable {
@@ -219,6 +231,12 @@ struct User: Decodable, Hashable, Sendable {
     let name: String
     let phone: String?
     let isAdmin: Bool
+    let locationSharing: Bool?
+    let locationSharingSince: Date?
+
+    var isSharingLocation: Bool {
+        locationSharing ?? false
+    }
 
     var initials: String {
         let letters = name.split(separator: " ").prefix(2).compactMap(\.first)

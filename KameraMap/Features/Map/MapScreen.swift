@@ -5,7 +5,11 @@ struct MapScreen: View {
     @Environment(SessionStore.self) var session
     @Environment(LocationProvider.self) var location
     @Environment(ToastCenter.self) var toasts
+    @Environment(TripTracker.self) var trip
     @State private var placementCardHeight: CGFloat = 0
+    @State private var tripPanelHeight: CGFloat = 0
+    @State private var following = true
+    @State private var followZoomed = false
 
     private let placementBottomPadding: CGFloat = 30
 
@@ -39,10 +43,20 @@ struct MapScreen: View {
                                 placementCardHeight = height
                             }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if trip.isActive {
+                        TripPanel(following: $following, onReport: startReport, onEnableSharing: enableSharing)
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { height in
+                                tripPanelHeight = height
+                            }
+                            .opacity(actionsHidden ? 0 : 1)
+                            .allowsHitTesting(!actionsHidden)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {
                         HStack {
                             Spacer()
-                            MapActions(onLocate: locate, onReport: startReport)
+                            MapActions(onLocate: locate, onTrip: startTrip, onReport: startReport)
                         }
                         .opacity(actionsHidden ? 0 : 1)
                         .allowsHitTesting(!actionsHidden)
@@ -50,13 +64,28 @@ struct MapScreen: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
-                .padding(.bottom, store.placing == nil ? 12 : placementBottomPadding)
+                .padding(.bottom, store.placing == nil && !trip.isActive ? 12 : placementBottomPadding)
 
                 ToastOverlay()
             }
         }
         .animation(.snappy(duration: 0.3), value: store.placing)
         .animation(.easeInOut(duration: 0.2), value: actionsHidden)
+        .animation(.snappy(duration: 0.3), value: trip.isActive)
+        .onChange(of: trip.isActive) { _, active in
+            if active {
+                following = true
+                followZoomed = false
+            }
+        }
+        .onChange(of: trip.location) { _, point in
+            follow(point)
+        }
+        .onChange(of: following) { _, on in
+            if on {
+                follow(trip.location)
+            }
+        }
         .sheet(item: $store.sheet) { sheet in
             SheetContent(sheet: sheet)
         }
@@ -112,10 +141,34 @@ struct MapScreen: View {
         if store.placing != nil {
             return safeBottom + placementBottomPadding + max(placementCardHeight, 120) + 6
         }
+        let base = trip.isActive ? safeBottom + placementBottomPadding + max(tripPanelHeight, 120) + 6 : 0
         if let sheet = store.sheet, sheet.coversMapPartially {
-            return screenHeight * AppConfig.detailSheetFraction
+            return max(base, screenHeight * AppConfig.detailSheetFraction)
         }
-        return 0
+        return base
+    }
+
+    private func follow(_ point: Coordinate?) {
+        guard trip.isActive, following, let point else { return }
+        store.target = CameraTarget(coordinate: point, zoom: followZoomed ? nil : 16)
+        followZoomed = true
+    }
+
+    private func startTrip() {
+        Haptics.tap()
+        guard session.isSignedIn else {
+            store.requireLogin(returningTo: .tripConsent(true))
+            return
+        }
+        if session.user?.isSharingLocation == true {
+            trip.start(api: session.api, sharing: true)
+        } else {
+            store.sheet = .tripConsent(true)
+        }
+    }
+
+    private func enableSharing() {
+        store.sheet = .tripConsent(false)
     }
 
     private func locate() {
@@ -163,6 +216,10 @@ private struct SheetContent: View {
                 .presentationDragIndicator(.visible)
         case .profile:
             ProfileSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        case .tripConsent(let starting):
+            TripConsentSheet(startingTrip: starting)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

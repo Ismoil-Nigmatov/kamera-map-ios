@@ -47,6 +47,10 @@ final class SessionStore {
         user = try await api.rename(name)
     }
 
+    func setLocationSharing(_ enabled: Bool) async throws {
+        user = try await api.setLocationSharing(enabled)
+    }
+
     func signOut() async {
         try? await api.logout()
         forget()
