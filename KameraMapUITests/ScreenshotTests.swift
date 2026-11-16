@@ -23,10 +23,6 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.buttons["reportButton"].waitForExistence(timeout: 30))
         sleep(8)
         snap("01-camera-card", app)
-        let sheetTop = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.64))
-        sheetTop.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)))
-        sleep(2)
-        snap("02-camera-card-full", app)
     }
 
     @MainActor
