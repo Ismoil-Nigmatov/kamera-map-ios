@@ -30,34 +30,47 @@ struct TripPoint: Encodable, Hashable, Sendable {
 }
 
 enum TripTexts {
-    static let sharing = "Во время поездки на сервер отправляются ваше местоположение, скорость и направление. История поездок хранится 30 дней. Её видят администраторы сервиса и сотрудники МВД: они могут найти ваши поездки по номеру телефона."
+    static let sharing = "Пока передача включена, приложение отправляет на сервер ваше местоположение, скорость и направление всегда, когда вы в движении, даже если оно закрыто. История поездок хранится 30 дней. Её видят администраторы сервиса и сотрудники МВД: они могут найти ваши поездки по номеру телефона."
     static let off = "Передачу можно выключить в любой момент — тогда вся история ваших поездок удаляется."
+    static let always = "Чтобы передача работала, когда приложение закрыто, разрешите доступ к геопозиции «Всегда»."
 }
 
 @Observable
 @MainActor
 final class TripTracker: NSObject, CLLocationManagerDelegate {
     private(set) var isActive = false
+    private(set) var isAutomatic = false
     private(set) var isSharing = false
     private(set) var location: Coordinate?
     private(set) var speedKmh: Int?
     private(set) var sent = 0
     private(set) var problem: String?
+    private(set) var authorization: CLAuthorizationStatus = .notDetermined
 
     let alerts = TripAlerts()
 
     @ObservationIgnored var onSharingRevoked: (@MainActor () -> Void)?
-    @ObservationIgnored private var previous: TripPoint?
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var api: APIClient?
     @ObservationIgnored private var trip = UUID()
-    @ObservationIgnored private var buffer: [TripPoint] = []
+    @ObservationIgnored private var previous: TripPoint?
+    @ObservationIgnored private var buffer: [Pending] = []
     @ObservationIgnored private var uploader: Task<Void, Never>?
     @ObservationIgnored private var isUploading = false
+    @ObservationIgnored private var updatesPaused = false
+    @ObservationIgnored private var backgroundTask = UIBackgroundTaskIdentifier.invalid
 
+    private struct Pending {
+        let trip: UUID
+        let point: TripPoint
+    }
+
+    private static let consentKey = "km.locationSharing"
     private static let batchSize = 200
-    private static let maxBuffered = 2_000
+    private static let batchesPerUpload = 5
+    private static let maxBuffered = 5_000
     private static let maxAccuracy = 100.0
+    private static let tripGap: TimeInterval = 300
     private static let deniedText = "Нет доступа к геопозиции"
 
     override init() {
@@ -67,68 +80,141 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = 10
         manager.pausesLocationUpdatesAutomatically = false
+        authorization = manager.authorizationStatus
+    }
+
+    var isRecording: Bool {
+        isActive || isAutomatic
+    }
+
+    var hasAlwaysAccess: Bool {
+        authorization == .authorizedAlways
+    }
+
+    func resumeIfConsented(api: APIClient) {
+        guard UserDefaults.standard.bool(forKey: Self.consentKey), api.token != nil else { return }
+        startAutomatic(api: api)
+    }
+
+    func consentGranted(api: APIClient) {
+        UserDefaults.standard.set(true, forKey: Self.consentKey)
+        requestAlwaysAccess()
+        startAutomatic(api: api)
+    }
+
+    func consentWithdrawn() {
+        UserDefaults.standard.set(false, forKey: Self.consentKey)
+        stopAutomatic()
+    }
+
+    func syncConsent(_ enabled: Bool, api: APIClient) {
+        UserDefaults.standard.set(enabled, forKey: Self.consentKey)
+        if enabled {
+            startAutomatic(api: api)
+        } else {
+            stopAutomatic()
+        }
+    }
+
+    func requestAlwaysAccess() {
+        switch manager.authorizationStatus {
+        case .notDetermined, .authorizedWhenInUse:
+            manager.requestAlwaysAuthorization()
+        default:
+            break
+        }
     }
 
     func start(api: APIClient, sharing: Bool) {
         guard !isActive else { return }
         self.api = api
-        trip = UUID()
-        buffer = []
-        sent = 0
         problem = nil
-        location = nil
-        speedKmh = nil
-        previous = nil
         alerts.reset()
-        isSharing = sharing
+        isSharing = sharing || isAutomatic
         isActive = true
-
-        manager.allowsBackgroundLocationUpdates = true
-        manager.showsBackgroundLocationIndicator = true
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
-            problem = Self.deniedText
-        default:
-            manager.startUpdatingLocation()
-        }
+        newTrip()
+        configure()
+        startUploader()
         UIApplication.shared.isIdleTimerDisabled = true
-
-        uploader = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(10))
-                guard !Task.isCancelled else { return }
-                await self?.upload()
-            }
-        }
     }
 
     func stop() {
         guard isActive else { return }
         isActive = false
-        manager.stopUpdatingLocation()
-        manager.allowsBackgroundLocationUpdates = false
-        uploader?.cancel()
-        uploader = nil
-        alerts.reset()
         UIApplication.shared.isIdleTimerDisabled = false
-        Task { await upload() }
+        alerts.reset()
+        newTrip()
+        if isAutomatic {
+            configure()
+        } else {
+            manager.stopUpdatingLocation()
+            manager.allowsBackgroundLocationUpdates = false
+            stopUploader()
+            flushInBackground()
+        }
     }
 
-    func enableSharing() {
+    func endAll() {
+        stop()
+        consentWithdrawn()
+    }
+
+    private func startAutomatic(api: APIClient) {
+        self.api = api
         isSharing = true
+        isAutomatic = true
+        configure()
+        startUploader()
     }
 
-    func disableSharing() {
+    private func stopAutomatic() {
+        guard isAutomatic || isSharing else { return }
+        isAutomatic = false
         isSharing = false
         buffer.removeAll()
+        manager.stopMonitoringSignificantLocationChanges()
+        if !isActive {
+            manager.stopUpdatingLocation()
+            manager.allowsBackgroundLocationUpdates = false
+            stopUploader()
+        }
+    }
+
+    private func configure() {
+        guard isRecording else { return }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.allowsBackgroundLocationUpdates = true
+            manager.showsBackgroundLocationIndicator = true
+            manager.pausesLocationUpdatesAutomatically = !isActive
+            manager.startUpdatingLocation()
+            updatesPaused = false
+            if isAutomatic, manager.authorizationStatus == .authorizedAlways {
+                manager.startMonitoringSignificantLocationChanges()
+            }
+        case .denied, .restricted:
+            problem = Self.deniedText
+        case .notDetermined:
+            if isActive {
+                manager.requestWhenInUseAuthorization()
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    private func newTrip() {
+        trip = UUID()
+        previous = nil
     }
 
     private func record(_ raw: TripPoint) {
-        guard isActive else { return }
+        guard isRecording else { return }
         if problem == Self.deniedText {
             problem = nil
+        }
+        if let previous, raw.recordedAt.timeIntervalSince(previous.recordedAt) > Self.tripGap {
+            newTrip()
         }
         let point = derived(from: raw)
         previous = raw
@@ -144,7 +230,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
             return
         }
 
-        buffer.append(point)
+        buffer.append(Pending(trip: trip, point: point))
         if buffer.count > Self.maxBuffered {
             buffer.removeFirst(buffer.count - Self.maxBuffered)
         }
@@ -168,35 +254,92 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
         )
     }
 
+    private func startUploader() {
+        guard uploader == nil else { return }
+        uploader = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { return }
+                await self?.upload()
+            }
+        }
+    }
+
+    private func stopUploader() {
+        uploader?.cancel()
+        uploader = nil
+    }
+
+    private func flushInBackground() {
+        if backgroundTask == .invalid {
+            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "km.positions") { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.endBackgroundTask()
+                }
+            }
+        }
+        Task {
+            await upload()
+            endBackgroundTask()
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
     private func upload() async {
-        guard isSharing, !isUploading, !buffer.isEmpty, let api else { return }
+        guard isSharing, !isUploading, let api, api.token != nil else { return }
         isUploading = true
         defer { isUploading = false }
 
-        let batch = Array(buffer.prefix(Self.batchSize))
-        do {
-            let stored = try await api.uploadPositions(trip: trip, points: batch)
-            buffer.removeFirst(min(batch.count, buffer.count))
-            sent += stored
-            problem = nil
-        } catch let error as APIError where error.status == 409 {
-            isSharing = false
-            buffer.removeAll()
-            onSharingRevoked?()
-        } catch let error as APIError where error.status == 422 {
-            buffer.removeFirst(min(batch.count, buffer.count))
-            problem = error.message
-        } catch {
-            problem = "Нет связи, отправим позже"
+        for _ in 0..<Self.batchesPerUpload {
+            guard isSharing, let first = buffer.first else { return }
+            let batch = Array(buffer.prefix(Self.batchSize).prefix { $0.trip == first.trip })
+            do {
+                let stored = try await api.uploadPositions(trip: first.trip, points: batch.map(\.point))
+                buffer.removeFirst(min(batch.count, buffer.count))
+                sent += stored
+                problem = nil
+            } catch let error as APIError where error.status == 409 {
+                consentWithdrawn()
+                onSharingRevoked?()
+                return
+            } catch let error as APIError where error.status == 422 {
+                buffer.removeFirst(min(batch.count, buffer.count))
+                problem = error.message
+            } catch {
+                problem = "Нет связи, отправим позже"
+                return
+            }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let points = locations.map { TripPoint($0) }
         MainActor.assumeIsolated {
+            if updatesPaused, isRecording {
+                updatesPaused = false
+                self.manager.startUpdatingLocation()
+            }
             for point in points {
                 record(point)
             }
+        }
+    }
+
+    nonisolated func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
+        MainActor.assumeIsolated {
+            updatesPaused = true
+            flushInBackground()
+        }
+    }
+
+    nonisolated func locationManagerDidResumeLocationUpdates(_ manager: CLLocationManager) {
+        MainActor.assumeIsolated {
+            updatesPaused = false
         }
     }
 
@@ -213,18 +356,14 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         MainActor.assumeIsolated {
-            guard isActive else { return }
-            switch status {
-            case .authorizedWhenInUse, .authorizedAlways:
-                if problem == Self.deniedText {
-                    problem = nil
-                }
-                self.manager.startUpdatingLocation()
-            case .denied, .restricted:
+            authorization = status
+            guard isRecording else { return }
+            if status == .denied || status == .restricted {
                 problem = Self.deniedText
-            default:
-                break
+            } else if problem == Self.deniedText {
+                problem = nil
             }
+            configure()
         }
     }
 }

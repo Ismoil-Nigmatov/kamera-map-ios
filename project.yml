@@ -47,7 +47,8 @@ targets:
           - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSLocationWhenInUseUsageDescription: Чтобы показать, где вы, поставить метку рядом с вами и вести поездку. Если вы включите передачу геопозиции, во время поездки она отправляется на сервер.
+        NSLocationWhenInUseUsageDescription: Чтобы показать, где вы, предупреждать о камерах в пути и ставить метки рядом с вами.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Если вы включили передачу геопозиции, приложение передаёт ваше местоположение во время движения, даже когда оно закрыто, и предупреждает о камерах на пути.
         UIBackgroundModes:
           - location
           - audio

@@ -73,12 +73,11 @@ struct TripConsentSheet: View {
                     return
                 }
                 isWorking = false
+                trip.consentGranted(api: session.api)
             }
             store.sheet = nil
             if startingTrip {
                 trip.start(api: session.api, sharing: share)
-            } else if share {
-                trip.enableSharing()
             }
         }
     }

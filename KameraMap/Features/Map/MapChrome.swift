@@ -3,6 +3,7 @@ import SwiftUI
 struct TopBar: View {
     @Environment(MapStore.self) var store
     @Environment(SessionStore.self) var session
+    @Environment(TripTracker.self) var trip
 
     var body: some View {
         @Bindable var store = store
@@ -24,6 +25,12 @@ struct TopBar: View {
                 }
                 if store.showCameras {
                     Legend()
+                }
+                if trip.isAutomatic, !trip.isActive {
+                    Label("Передача геопозиции включена", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Palette.brand)
+                        .accessibilityIdentifier("autoSharingBadge")
                 }
             }
             .padding(10)

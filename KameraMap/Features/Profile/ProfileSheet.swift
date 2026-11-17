@@ -10,6 +10,7 @@ struct ProfileSheet: View {
     @State var isChangingSharing = false
     @State var confirmStopSharing = false
     @Environment(TripTracker.self) var trip
+    @Environment(\.openURL) var openURL
 
     var body: some View {
         NavigationStack {
@@ -51,10 +52,28 @@ struct ProfileSheet: View {
                     } message: {
                         Text("История ваших поездок будет удалена.")
                     }
+
+                    if session.user?.isSharingLocation == true, !trip.hasAlwaysAccess {
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                openURL(url)
+                            }
+                        } label: {
+                            Label("Разрешить доступ «Всегда»", systemImage: "location.circle")
+                        }
+                    }
+
+                    Toggle(isOn: voiceBinding) {
+                        Label("Голосовые предупреждения", systemImage: "speaker.wave.2.fill")
+                    }
                 } header: {
                     Text("Поездки")
                 } footer: {
-                    Text("\(TripTexts.sharing) \(TripTexts.off)")
+                    if session.user?.isSharingLocation == true, !trip.hasAlwaysAccess {
+                        Text("\(TripTexts.always) \(TripTexts.sharing) \(TripTexts.off)")
+                    } else {
+                        Text("\(TripTexts.sharing) \(TripTexts.off)")
+                    }
                 }
 
                 Section("Имя") {
@@ -75,7 +94,7 @@ struct ProfileSheet: View {
                 Section {
                     Button {
                         Task {
-                            trip.stop()
+                            trip.endAll()
                             await session.signOut()
                             store.sheet = nil
                             toasts.show("Вы вышли из аккаунта.")
@@ -161,15 +180,26 @@ struct ProfileSheet: View {
         )
     }
 
+    private var voiceBinding: Binding<Bool> {
+        Binding(
+            get: { trip.alerts.voiceEnabled },
+            set: { enabled in
+                if enabled != trip.alerts.voiceEnabled {
+                    trip.alerts.toggleVoice()
+                }
+            }
+        )
+    }
+
     private func changeSharing(_ enabled: Bool) async {
         isChangingSharing = true
         defer { isChangingSharing = false }
         do {
             try await session.setLocationSharing(enabled)
             if enabled {
-                trip.enableSharing()
+                trip.consentGranted(api: session.api)
             } else {
-                trip.disableSharing()
+                trip.consentWithdrawn()
             }
             toasts.show(enabled ? "Передача геопозиции включена." : "Передача выключена, история поездок удалена.")
         } catch {
@@ -179,7 +209,7 @@ struct ProfileSheet: View {
 
     private func deleteAccount() async {
         do {
-            trip.stop()
+            trip.endAll()
             try await session.deleteAccount()
             store.sheet = nil
             toasts.show("Аккаунт удалён.")
