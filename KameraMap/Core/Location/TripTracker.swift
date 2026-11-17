@@ -69,7 +69,7 @@ final class TripTracker: NSObject, CLLocationManagerDelegate {
     private static let batchSize = 200
     private static let batchesPerUpload = 5
     private static let maxBuffered = 5_000
-    private static let maxAccuracy = 100.0
+    private static let maxAccuracy = 1_000.0
     private static let tripGap: TimeInterval = 300
     private static let deniedText = "Нет доступа к геопозиции"
 
